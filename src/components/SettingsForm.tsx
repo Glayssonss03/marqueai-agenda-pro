@@ -9,6 +9,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useProfile } from "@/hooks/useProfile";
 import { useSettings } from "@/hooks/useSettings";
 
+interface OpeningHours {
+  [key: string]: {
+    open: string;
+    close: string;
+    closed: boolean;
+  };
+}
+
 export const SettingsForm = () => {
   const { profile, updateProfile } = useProfile();
   const { settings, updateSettings } = useSettings();
@@ -33,7 +41,7 @@ export const SettingsForm = () => {
       friday: { open: "09:00", close: "18:00", closed: false },
       saturday: { open: "09:00", close: "18:00", closed: false },
       sunday: { open: "09:00", close: "18:00", closed: true },
-    },
+    } as OpeningHours,
   });
 
   useEffect(() => {
@@ -54,7 +62,7 @@ export const SettingsForm = () => {
         email_notifications: settings.email_notifications ?? true,
         whatsapp_notifications: settings.whatsapp_notifications ?? true,
         whatsapp_number: settings.whatsapp_number || "",
-        opening_hours: settings.opening_hours || settingsData.opening_hours,
+        opening_hours: (settings.opening_hours as OpeningHours) || settingsData.opening_hours,
       });
     }
   }, [settings]);

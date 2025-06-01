@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,8 +22,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { useProfile } from "@/hooks/useProfile";
 import { useProfessionals } from "@/hooks/useProfessionals";
 import { useServices } from "@/hooks/useServices";
+import { useAppointments } from "@/hooks/useAppointments";
 import { ProfessionalForm } from "@/components/ProfessionalForm";
 import { ServiceForm } from "@/components/ServiceForm";
+import { AppointmentForm } from "@/components/AppointmentForm";
 import { SettingsForm } from "@/components/SettingsForm";
 import { useToast } from "@/hooks/use-toast";
 
@@ -34,8 +35,10 @@ const Dashboard = () => {
   const [activeTab, setActiveTab] = useState("overview");
   const [showProfessionalForm, setShowProfessionalForm] = useState(false);
   const [showServiceForm, setShowServiceForm] = useState(false);
+  const [showAppointmentForm, setShowAppointmentForm] = useState(false);
   const [editingProfessional, setEditingProfessional] = useState(null);
   const [editingService, setEditingService] = useState(null);
+  const [editingAppointment, setEditingAppointment] = useState(null);
 
   const { profile, isLoading: profileLoading } = useProfile();
   const { 
@@ -52,6 +55,13 @@ const Dashboard = () => {
     updateService, 
     deleteService 
   } = useServices();
+  const {
+    appointments,
+    isLoading: appointmentsLoading,
+    addAppointment,
+    updateAppointment,
+    deleteAppointment
+  } = useAppointments();
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -78,6 +88,16 @@ const Dashboard = () => {
     setShowServiceForm(false);
   };
 
+  const handleAppointmentSubmit = (data: any) => {
+    if (editingAppointment) {
+      updateAppointment.mutate({ id: editingAppointment.id, ...data });
+      setEditingAppointment(null);
+    } else {
+      addAppointment.mutate(data);
+    }
+    setShowAppointmentForm(false);
+  };
+
   const handleEditProfessional = (professional: any) => {
     setEditingProfessional(professional);
     setShowProfessionalForm(true);
@@ -86,6 +106,11 @@ const Dashboard = () => {
   const handleEditService = (service: any) => {
     setEditingService(service);
     setShowServiceForm(true);
+  };
+
+  const handleEditAppointment = (appointment: any) => {
+    setEditingAppointment(appointment);
+    setShowAppointmentForm(true);
   };
 
   const getTrialDaysLeft = () => {
@@ -120,6 +145,11 @@ const Dashboard = () => {
   if (profileLoading) {
     return <div className="min-h-screen bg-gray-50 flex items-center justify-center">Carregando...</div>;
   }
+
+  const todayAppointments = appointments.filter(apt => {
+    const today = new Date().toISOString().split('T')[0];
+    return apt.appointment_date === today;
+  });
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -196,8 +226,10 @@ const Dashboard = () => {
                   <Calendar className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">0</div>
-                  <p className="text-xs text-muted-foreground">Nenhum agendamento hoje</p>
+                  <div className="text-2xl font-bold">{todayAppointments.length}</div>
+                  <p className="text-xs text-muted-foreground">
+                    {todayAppointments.length === 0 ? "Nenhum agendamento hoje" : "agendamentos confirmados"}
+                  </p>
                 </CardContent>
               </Card>
 
@@ -288,6 +320,85 @@ const Dashboard = () => {
                 </CardContent>
               </Card>
             )}
+          </TabsContent>
+
+          <TabsContent value="appointments" className="space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-2xl font-bold">Agendamentos</h2>
+              <Button 
+                className="bg-primary hover:bg-primary-600"
+                onClick={() => setShowAppointmentForm(true)}
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Novo Agendamento
+              </Button>
+            </div>
+
+            {showAppointmentForm && (
+              <AppointmentForm
+                onSubmit={handleAppointmentSubmit}
+                onCancel={() => {
+                  setShowAppointmentForm(false);
+                  setEditingAppointment(null);
+                }}
+                initialData={editingAppointment}
+              />
+            )}
+
+            <div className="grid gap-4">
+              {appointments.length === 0 ? (
+                <Card>
+                  <CardContent className="text-center py-12 text-gray-500">
+                    <Calendar className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                    <p>Nenhum agendamento encontrado</p>
+                    <p className="text-sm mt-2">
+                      Crie agendamentos manualmente ou compartilhe o link da sua barbearia
+                    </p>
+                  </CardContent>
+                </Card>
+              ) : (
+                appointments.map((appointment) => (
+                  <Card key={appointment.id}>
+                    <CardContent className="flex items-center justify-between p-6">
+                      <div>
+                        <h3 className="font-semibold text-lg">{appointment.client_name}</h3>
+                        <p className="text-gray-600">{appointment.service?.name}</p>
+                        <p className="text-gray-500 text-sm">
+                          {appointment.professional?.name} • {appointment.appointment_date} às {appointment.appointment_time}
+                        </p>
+                        <p className="text-gray-500 text-sm">{appointment.client_phone}</p>
+                      </div>
+                      <div className="flex items-center space-x-4">
+                        <div className="text-right">
+                          <p className="font-bold text-lg">R$ {appointment.service?.price?.toFixed(2) || '0.00'}</p>
+                          <Badge variant={appointment.status === 'scheduled' ? "default" : "secondary"}>
+                            {appointment.status === 'scheduled' ? 'Agendado' : 
+                             appointment.status === 'confirmed' ? 'Confirmado' :
+                             appointment.status === 'cancelled' ? 'Cancelado' : 'Concluído'}
+                          </Badge>
+                        </div>
+                        <div className="flex space-x-2">
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => handleEditAppointment(appointment)}
+                          >
+                            <Edit className="w-4 h-4" />
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => deleteAppointment.mutate(appointment.id)}
+                          >
+                            <Trash className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))
+              )}
+            </div>
           </TabsContent>
 
           <TabsContent value="services" className="space-y-6">
@@ -425,34 +536,6 @@ const Dashboard = () => {
                 </Card>
               ))}
             </div>
-          </TabsContent>
-
-          <TabsContent value="appointments" className="space-y-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-2xl font-bold">Todos os Agendamentos</h2>
-              <Button className="bg-primary hover:bg-primary-600">
-                <Plus className="w-4 h-4 mr-2" />
-                Novo Agendamento
-              </Button>
-            </div>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Agenda Completa</CardTitle>
-                <CardDescription>
-                  Visualize e gerencie todos os agendamentos
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="text-center py-12 text-gray-500">
-                  <Calendar className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                  <p>Nenhum agendamento encontrado</p>
-                  <p className="text-sm mt-2">
-                    Configure seus serviços e profissionais para começar a receber agendamentos
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
           </TabsContent>
 
           <TabsContent value="reports" className="space-y-6">
