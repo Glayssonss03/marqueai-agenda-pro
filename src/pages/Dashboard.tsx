@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -180,6 +181,13 @@ const Dashboard = () => {
                 Escolher Plano
               </Button>
             )}
+            {profile?.slug && (
+              <Button variant="outline" size="sm" asChild>
+                <Link to={`/booking/${profile.slug}`} target="_blank">
+                  Ver Página Pública
+                </Link>
+              </Button>
+            )}
             <Button variant="outline" size="sm">
               <Bell className="w-4 h-4 mr-2" />
               Notificações
@@ -201,7 +209,7 @@ const Dashboard = () => {
             Gerencie sua barbearia de forma simples e eficiente
           </p>
           {profile?.slug && (
-            <p className="text-sm text-blue-600">
+            <p className="text-sm text-blue-600 mt-2">
               Link público: marqueai.com/{profile.slug}
             </p>
           )}
@@ -489,52 +497,57 @@ const Dashboard = () => {
             )}
 
             <div className="grid gap-4">
-              {professionals.map((professional) => (
-                <Card key={professional.id}>
-                  <CardContent className="flex items-center justify-between p-6">
-                    <div className="flex items-center space-x-4">
-                      {professional.photo_url && (
-                        <img 
-                          src={professional.photo_url} 
-                          alt={professional.name}
-                          className="w-12 h-12 rounded-full object-cover"
-                        />
-                      )}
-                      <div>
-                        <h3 className="font-semibold text-lg">{professional.name}</h3>
-                        <div className="flex space-x-2 mt-2">
-                          {professional.specialties?.map((specialty: string) => (
-                            <Badge key={specialty} variant="secondary">
-                              {specialty}
-                            </Badge>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center space-x-4">
-                      <Badge variant={professional.is_active ? "default" : "secondary"}>
-                        {professional.is_active ? "Ativo" : "Inativo"}
-                      </Badge>
-                      <div className="flex space-x-2">
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => handleEditProfessional(professional)}
-                        >
-                          <Edit className="w-4 h-4" />
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => deleteProfessional.mutate(professional.id)}
-                        >
-                          <Trash className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
+              {professionals.length === 0 ? (
+                <Card>
+                  <CardContent className="text-center py-12 text-gray-500">
+                    <Users className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                    <p>Nenhum profissional cadastrado</p>
+                    <p className="text-sm mt-2">
+                      Adicione profissionais para começar a receber agendamentos
+                    </p>
                   </CardContent>
                 </Card>
-              ))}
+              ) : (
+                professionals.map((professional) => (
+                  <Card key={professional.id}>
+                    <CardContent className="flex items-center justify-between p-6">
+                      <div className="flex items-center space-x-4">
+                        <div>
+                          <h3 className="font-semibold text-lg">{professional.name}</h3>
+                          <div className="flex space-x-2 mt-2">
+                            {professional.specialties?.map((specialty: string) => (
+                              <Badge key={specialty} variant="secondary">
+                                {specialty}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-4">
+                        <Badge variant={professional.is_active ? "default" : "secondary"}>
+                          {professional.is_active ? "Ativo" : "Inativo"}
+                        </Badge>
+                        <div className="flex space-x-2">
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => handleEditProfessional(professional)}
+                          >
+                            <Edit className="w-4 h-4" />
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => deleteProfessional.mutate(professional.id)}
+                          >
+                            <Trash className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))
+              )}
             </div>
           </TabsContent>
 
