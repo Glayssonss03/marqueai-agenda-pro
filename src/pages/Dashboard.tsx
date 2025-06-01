@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -15,30 +15,111 @@ import {
   LogOut,
   Edit,
   Trash,
-  Star
+  Star,
+  AlertTriangle
 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { useProfile } from "@/hooks/useProfile";
+import { useProfessionals } from "@/hooks/useProfessionals";
+import { useServices } from "@/hooks/useServices";
+import { ProfessionalForm } from "@/components/ProfessionalForm";
+import { ServiceForm } from "@/components/ServiceForm";
+import { SettingsForm } from "@/components/SettingsForm";
+import { useToast } from "@/hooks/use-toast";
 
 const Dashboard = () => {
+  const navigate = useNavigate();
+  const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("overview");
+  const [showProfessionalForm, setShowProfessionalForm] = useState(false);
+  const [showServiceForm, setShowServiceForm] = useState(false);
+  const [editingProfessional, setEditingProfessional] = useState(null);
+  const [editingService, setEditingService] = useState(null);
 
-  // Dados de exemplo
-  const todayAppointments = [
-    { id: 1, client: "João Silva", service: "Corte + Barba", time: "09:00", professional: "Carlos", price: "R$ 45" },
-    { id: 2, client: "Pedro Santos", service: "Corte Simples", time: "10:30", professional: "Carlos", price: "R$ 25" },
-    { id: 3, client: "Lucas Oliveira", service: "Barba", time: "14:00", professional: "André", price: "R$ 20" },
-  ];
+  const { profile, isLoading: profileLoading } = useProfile();
+  const { 
+    professionals, 
+    isLoading: professionalsLoading, 
+    addProfessional, 
+    updateProfessional, 
+    deleteProfessional 
+  } = useProfessionals();
+  const { 
+    services, 
+    isLoading: servicesLoading, 
+    addService, 
+    updateService, 
+    deleteService 
+  } = useServices();
 
-  const services = [
-    { id: 1, name: "Corte Simples", price: "R$ 25", duration: "30 min" },
-    { id: 2, name: "Corte + Barba", price: "R$ 45", duration: "45 min" },
-    { id: 3, name: "Barba", price: "R$ 20", duration: "20 min" },
-  ];
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    navigate("/");
+  };
 
-  const professionals = [
-    { id: 1, name: "Carlos Silva", specialties: ["Corte", "Barba"], active: true },
-    { id: 2, name: "André Costa", specialties: ["Corte", "Bigode"], active: true },
-  ];
+  const handleProfessionalSubmit = (data: any) => {
+    if (editingProfessional) {
+      updateProfessional.mutate({ id: editingProfessional.id, ...data });
+      setEditingProfessional(null);
+    } else {
+      addProfessional.mutate(data);
+    }
+    setShowProfessionalForm(false);
+  };
+
+  const handleServiceSubmit = (data: any) => {
+    if (editingService) {
+      updateService.mutate({ id: editingService.id, ...data });
+      setEditingService(null);
+    } else {
+      addService.mutate(data);
+    }
+    setShowServiceForm(false);
+  };
+
+  const handleEditProfessional = (professional: any) => {
+    setEditingProfessional(professional);
+    setShowProfessionalForm(true);
+  };
+
+  const handleEditService = (service: any) => {
+    setEditingService(service);
+    setShowServiceForm(true);
+  };
+
+  const getTrialDaysLeft = () => {
+    if (!profile?.trial_ends_at) return 0;
+    const trialEnd = new Date(profile.trial_ends_at);
+    const now = new Date();
+    const diffTime = trialEnd.getTime() - now.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return Math.max(0, diffDays);
+  };
+
+  const trialDaysLeft = getTrialDaysLeft();
+  const isTrialExpired = profile?.subscription_status === 'expired';
+  const isOnTrial = profile?.subscription_status === 'trial';
+
+  useEffect(() => {
+    if (isTrialExpired) {
+      toast({
+        title: "Período de teste expirado",
+        description: "Escolha um plano para continuar usando o Marqueai.",
+        variant: "destructive",
+      });
+    } else if (isOnTrial && trialDaysLeft <= 2) {
+      toast({
+        title: "Período gratuito termina em breve",
+        description: `Seu período gratuito termina em ${trialDaysLeft} dia(s). Escolha um plano para continuar.`,
+        variant: "destructive",
+      });
+    }
+  }, [isTrialExpired, isOnTrial, trialDaysLeft, toast]);
+
+  if (profileLoading) {
+    return <div className="min-h-screen bg-gray-50 flex items-center justify-center">Carregando...</div>;
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -52,21 +133,31 @@ const Dashboard = () => {
               </div>
               <span className="text-xl font-bold text-gray-900">Marqueai</span>
             </div>
-            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-              Plano Gratuito
+            <Badge variant="outline" className={`${
+              isTrialExpired ? 'bg-red-50 text-red-700 border-red-200' : 
+              isOnTrial ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
+              'bg-green-50 text-green-700 border-green-200'
+            }`}>
+              {isTrialExpired ? 'Expirado' : 
+               isOnTrial ? `Teste: ${trialDaysLeft} dias` : 
+               'Plano Pro'}
             </Badge>
           </div>
           <div className="flex items-center space-x-4">
+            {(isTrialExpired || (isOnTrial && trialDaysLeft <= 2)) && (
+              <Button variant="default" size="sm" className="bg-red-600 hover:bg-red-700">
+                <AlertTriangle className="w-4 h-4 mr-2" />
+                Escolher Plano
+              </Button>
+            )}
             <Button variant="outline" size="sm">
               <Bell className="w-4 h-4 mr-2" />
               Notificações
             </Button>
-            <Link to="/">
-              <Button variant="outline" size="sm">
-                <LogOut className="w-4 h-4 mr-2" />
-                Sair
-              </Button>
-            </Link>
+            <Button variant="outline" size="sm" onClick={handleSignOut}>
+              <LogOut className="w-4 h-4 mr-2" />
+              Sair
+            </Button>
           </div>
         </div>
       </header>
@@ -74,11 +165,16 @@ const Dashboard = () => {
       <div className="p-6">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Barbearia Moderna
+            {profile?.barbershop_name || "Sua Barbearia"}
           </h1>
           <p className="text-gray-600">
             Gerencie sua barbearia de forma simples e eficiente
           </p>
+          {profile?.slug && (
+            <p className="text-sm text-blue-600">
+              Link público: marqueai.com/{profile.slug}
+            </p>
+          )}
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
@@ -100,85 +196,122 @@ const Dashboard = () => {
                   <Calendar className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">3</div>
-                  <p className="text-xs text-muted-foreground">+2 desde ontem</p>
+                  <div className="text-2xl font-bold">0</div>
+                  <p className="text-xs text-muted-foreground">Nenhum agendamento hoje</p>
                 </CardContent>
               </Card>
 
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Faturamento Hoje</CardTitle>
-                  <BarChart3 className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">R$ 90</div>
-                  <p className="text-xs text-muted-foreground">+15% desde ontem</p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Clientes Ativos</CardTitle>
+                  <CardTitle className="text-sm font-medium">Profissionais</CardTitle>
                   <Users className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">28</div>
-                  <p className="text-xs text-muted-foreground">+5 este mês</p>
+                  <div className="text-2xl font-bold">{professionals.length}</div>
+                  <p className="text-xs text-muted-foreground">
+                    {professionals.filter(p => p.is_active).length} ativos
+                  </p>
                 </CardContent>
               </Card>
 
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Avaliação Média</CardTitle>
+                  <CardTitle className="text-sm font-medium">Serviços</CardTitle>
+                  <Clock className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{services.length}</div>
+                  <p className="text-xs text-muted-foreground">
+                    {services.filter(s => s.is_active).length} disponíveis
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Status</CardTitle>
                   <Star className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">4.8</div>
-                  <p className="text-xs text-muted-foreground">⭐⭐⭐⭐⭐</p>
+                  <div className="text-2xl font-bold">
+                    {isTrialExpired ? "❌" : isOnTrial ? "🟡" : "✅"}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {isTrialExpired ? "Expirado" : 
+                     isOnTrial ? `${trialDaysLeft} dias restantes` : 
+                     "Ativo"}
+                  </p>
                 </CardContent>
               </Card>
             </div>
 
-            {/* Agendamentos de Hoje */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Agendamentos de Hoje</CardTitle>
-                <CardDescription>
-                  Próximos horários agendados para hoje
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {todayAppointments.map((appointment) => (
-                    <div key={appointment.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
-                      <div className="flex items-center space-x-4">
-                        <div className="text-lg font-semibold text-primary">
-                          {appointment.time}
-                        </div>
-                        <div>
-                          <p className="font-medium">{appointment.client}</p>
-                          <p className="text-sm text-gray-600">{appointment.service}</p>
-                        </div>
+            {/* Quick Setup */}
+            {(professionals.length === 0 || services.length === 0) && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Configuração Inicial</CardTitle>
+                  <CardDescription>
+                    Complete a configuração da sua barbearia para começar a receber agendamentos
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {professionals.length === 0 && (
+                      <div className="flex items-center justify-between p-3 border rounded">
+                        <span>Adicione pelo menos um profissional</span>
+                        <Button 
+                          size="sm"
+                          onClick={() => {
+                            setActiveTab("professionals");
+                            setShowProfessionalForm(true);
+                          }}
+                        >
+                          Adicionar
+                        </Button>
                       </div>
-                      <div className="text-right">
-                        <p className="font-semibold">{appointment.price}</p>
-                        <p className="text-sm text-gray-600">{appointment.professional}</p>
+                    )}
+                    {services.length === 0 && (
+                      <div className="flex items-center justify-between p-3 border rounded">
+                        <span>Adicione pelo menos um serviço</span>
+                        <Button 
+                          size="sm"
+                          onClick={() => {
+                            setActiveTab("services");
+                            setShowServiceForm(true);
+                          }}
+                        >
+                          Adicionar
+                        </Button>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
 
           <TabsContent value="services" className="space-y-6">
             <div className="flex items-center justify-between">
               <h2 className="text-2xl font-bold">Serviços</h2>
-              <Button className="bg-primary hover:bg-primary-600">
+              <Button 
+                className="bg-primary hover:bg-primary-600"
+                onClick={() => setShowServiceForm(true)}
+              >
                 <Plus className="w-4 h-4 mr-2" />
                 Novo Serviço
               </Button>
             </div>
+
+            {showServiceForm && (
+              <ServiceForm
+                onSubmit={handleServiceSubmit}
+                onCancel={() => {
+                  setShowServiceForm(false);
+                  setEditingService(null);
+                }}
+                initialData={editingService}
+              />
+            )}
 
             <div className="grid gap-4">
               {services.map((service) => (
@@ -186,17 +319,31 @@ const Dashboard = () => {
                   <CardContent className="flex items-center justify-between p-6">
                     <div>
                       <h3 className="font-semibold text-lg">{service.name}</h3>
-                      <p className="text-gray-600">{service.duration}</p>
+                      {service.description && (
+                        <p className="text-gray-600 text-sm mt-1">{service.description}</p>
+                      )}
+                      <p className="text-gray-500 text-sm">{service.duration_minutes} minutos</p>
                     </div>
                     <div className="flex items-center space-x-4">
                       <div className="text-right">
-                        <p className="font-bold text-lg">{service.price}</p>
+                        <p className="font-bold text-lg">R$ {service.price.toFixed(2)}</p>
+                        <Badge variant={service.is_active ? "default" : "secondary"}>
+                          {service.is_active ? "Ativo" : "Inativo"}
+                        </Badge>
                       </div>
                       <div className="flex space-x-2">
-                        <Button variant="outline" size="sm">
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => handleEditService(service)}
+                        >
                           <Edit className="w-4 h-4" />
                         </Button>
-                        <Button variant="outline" size="sm">
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => deleteService.mutate(service.id)}
+                        >
                           <Trash className="w-4 h-4" />
                         </Button>
                       </div>
@@ -210,35 +357,66 @@ const Dashboard = () => {
           <TabsContent value="professionals" className="space-y-6">
             <div className="flex items-center justify-between">
               <h2 className="text-2xl font-bold">Profissionais</h2>
-              <Button className="bg-primary hover:bg-primary-600">
+              <Button 
+                className="bg-primary hover:bg-primary-600"
+                onClick={() => setShowProfessionalForm(true)}
+              >
                 <Plus className="w-4 h-4 mr-2" />
                 Novo Profissional
               </Button>
             </div>
 
+            {showProfessionalForm && (
+              <ProfessionalForm
+                onSubmit={handleProfessionalSubmit}
+                onCancel={() => {
+                  setShowProfessionalForm(false);
+                  setEditingProfessional(null);
+                }}
+                initialData={editingProfessional}
+              />
+            )}
+
             <div className="grid gap-4">
               {professionals.map((professional) => (
                 <Card key={professional.id}>
                   <CardContent className="flex items-center justify-between p-6">
-                    <div>
-                      <h3 className="font-semibold text-lg">{professional.name}</h3>
-                      <div className="flex space-x-2 mt-2">
-                        {professional.specialties.map((specialty) => (
-                          <Badge key={specialty} variant="secondary">
-                            {specialty}
-                          </Badge>
-                        ))}
+                    <div className="flex items-center space-x-4">
+                      {professional.photo_url && (
+                        <img 
+                          src={professional.photo_url} 
+                          alt={professional.name}
+                          className="w-12 h-12 rounded-full object-cover"
+                        />
+                      )}
+                      <div>
+                        <h3 className="font-semibold text-lg">{professional.name}</h3>
+                        <div className="flex space-x-2 mt-2">
+                          {professional.specialties?.map((specialty: string) => (
+                            <Badge key={specialty} variant="secondary">
+                              {specialty}
+                            </Badge>
+                          ))}
+                        </div>
                       </div>
                     </div>
                     <div className="flex items-center space-x-4">
-                      <Badge variant={professional.active ? "default" : "secondary"}>
-                        {professional.active ? "Ativo" : "Inativo"}
+                      <Badge variant={professional.is_active ? "default" : "secondary"}>
+                        {professional.is_active ? "Ativo" : "Inativo"}
                       </Badge>
                       <div className="flex space-x-2">
-                        <Button variant="outline" size="sm">
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => handleEditProfessional(professional)}
+                        >
                           <Edit className="w-4 h-4" />
                         </Button>
-                        <Button variant="outline" size="sm">
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => deleteProfessional.mutate(professional.id)}
+                        >
                           <Trash className="w-4 h-4" />
                         </Button>
                       </div>
@@ -268,7 +446,10 @@ const Dashboard = () => {
               <CardContent>
                 <div className="text-center py-12 text-gray-500">
                   <Calendar className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                  <p>Calendário de agendamentos será implementado aqui</p>
+                  <p>Nenhum agendamento encontrado</p>
+                  <p className="text-sm mt-2">
+                    Configure seus serviços e profissionais para começar a receber agendamentos
+                  </p>
                 </div>
               </CardContent>
             </Card>
@@ -287,7 +468,7 @@ const Dashboard = () => {
               <CardContent>
                 <div className="text-center py-12 text-gray-500">
                   <BarChart3 className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                  <p>Gráficos e relatórios serão implementados aqui</p>
+                  <p>Relatórios disponíveis após os primeiros agendamentos</p>
                 </div>
               </CardContent>
             </Card>
@@ -295,21 +476,7 @@ const Dashboard = () => {
 
           <TabsContent value="settings" className="space-y-6">
             <h2 className="text-2xl font-bold">Configurações</h2>
-            
-            <Card>
-              <CardHeader>
-                <CardTitle>Configurações da Barbearia</CardTitle>
-                <CardDescription>
-                  Personalize sua barbearia e configurações
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="text-center py-12 text-gray-500">
-                  <Settings className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                  <p>Configurações serão implementadas aqui</p>
-                </div>
-              </CardContent>
-            </Card>
+            <SettingsForm />
           </TabsContent>
         </Tabs>
       </div>

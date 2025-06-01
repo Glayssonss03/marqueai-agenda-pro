@@ -1,163 +1,191 @@
 
 import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Calendar, ArrowLeft } from "lucide-react";
-import { Link, useNavigate } from "react-router-dom";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Calendar } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
 const Register = () => {
   const [formData, setFormData] = useState({
     barbershopName: "",
+    ownerName: "",
     email: "",
+    phone: "",
     password: "",
-    confirmPassword: "",
-    whatsapp: ""
   });
-  const [isLoading, setIsLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    });
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
+    setLoading(true);
 
-    if (formData.password !== formData.confirmPassword) {
+    try {
+      // Criar usuário no Auth
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: formData.email,
+        password: formData.password,
+      });
+
+      if (authError) throw authError;
+
+      if (authData.user) {
+        // Criar perfil da barbearia
+        const { error: profileError } = await supabase
+          .from("profiles")
+          .insert({
+            id: authData.user.id,
+            barbershop_name: formData.barbershopName,
+            owner_name: formData.ownerName,
+            email: formData.email,
+            phone: formData.phone,
+          });
+
+        if (profileError) throw profileError;
+
+        toast({ 
+          title: "Conta criada com sucesso!",
+          description: "Você terá 7 dias grátis para testar o Marqueai."
+        });
+        
+        navigate("/dashboard");
+      }
+    } catch (error: any) {
       toast({
-        title: "Erro na confirmação",
-        description: "As senhas não coincidem.",
+        title: "Erro ao criar conta",
+        description: error.message,
         variant: "destructive",
       });
-      setIsLoading(false);
-      return;
+    } finally {
+      setLoading(false);
     }
+  };
 
-    // Simulação de registro - em produção conectaria com Supabase
-    setTimeout(() => {
-      toast({
-        title: "Conta criada com sucesso! 🎉",
-        description: "Bem-vindo ao Marqueai! Configure sua barbearia.",
-      });
-      navigate("/dashboard");
-      setIsLoading(false);
-    }, 1500);
+  const handleInputChange = (field: string, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary-50 to-white flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-white flex items-center justify-center p-4">
       <div className="w-full max-w-md">
+        {/* Logo */}
         <div className="text-center mb-8">
-          <Link to="/" className="inline-flex items-center space-x-2 text-gray-600 hover:text-primary transition-colors mb-6">
-            <ArrowLeft className="w-4 h-4" />
-            <span>Voltar ao site</span>
-          </Link>
-          <div className="flex items-center justify-center space-x-2 mb-4">
-            <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
-              <Calendar className="w-5 h-5 text-white" />
+          <div className="inline-flex items-center space-x-2 mb-4">
+            <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center">
+              <Calendar className="w-6 h-6 text-white" />
             </div>
             <span className="text-2xl font-bold text-gray-900">Marqueai</span>
           </div>
+          <p className="text-gray-600">
+            Crie sua conta gratuita
+          </p>
+          <p className="text-sm text-green-600 font-medium mt-1">
+            7 dias de teste grátis
+          </p>
         </div>
 
-        <Card className="shadow-lg border-gray-100">
-          <CardHeader className="text-center">
-            <CardTitle className="text-2xl">Criar sua conta</CardTitle>
+        <Card>
+          <CardHeader>
+            <CardTitle>Criar Conta</CardTitle>
             <CardDescription>
-              Comece grátis e transforme sua barbearia
+              Preencha os dados para começar a usar o Marqueai
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="barbershopName">Nome da Barbearia</Label>
+            <form onSubmit={handleRegister} className="space-y-4">
+              <div>
+                <Label htmlFor="barbershopName">Nome da Barbearia *</Label>
                 <Input
                   id="barbershopName"
-                  name="barbershopName"
-                  placeholder="Ex: Barbearia Moderna"
                   value={formData.barbershopName}
-                  onChange={handleInputChange}
+                  onChange={(e) => handleInputChange("barbershopName", e.target.value)}
+                  placeholder="Barbearia Moderna"
                   required
-                  className="rounded-lg"
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="email">E-mail</Label>
+
+              <div>
+                <Label htmlFor="ownerName">Seu Nome *</Label>
+                <Input
+                  id="ownerName"
+                  value={formData.ownerName}
+                  onChange={(e) => handleInputChange("ownerName", e.target.value)}
+                  placeholder="João Silva"
+                  required
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="email">E-mail *</Label>
                 <Input
                   id="email"
-                  name="email"
                   type="email"
-                  placeholder="seu@email.com"
                   value={formData.email}
-                  onChange={handleInputChange}
+                  onChange={(e) => handleInputChange("email", e.target.value)}
+                  placeholder="seu@email.com"
                   required
-                  className="rounded-lg"
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="whatsapp">WhatsApp</Label>
+
+              <div>
+                <Label htmlFor="phone">WhatsApp</Label>
                 <Input
-                  id="whatsapp"
-                  name="whatsapp"
+                  id="phone"
+                  value={formData.phone}
+                  onChange={(e) => handleInputChange("phone", e.target.value)}
                   placeholder="(11) 99999-9999"
-                  value={formData.whatsapp}
-                  onChange={handleInputChange}
-                  required
-                  className="rounded-lg"
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="password">Senha</Label>
+
+              <div>
+                <Label htmlFor="password">Senha *</Label>
                 <Input
                   id="password"
-                  name="password"
                   type="password"
-                  placeholder="Mínimo 6 caracteres"
                   value={formData.password}
-                  onChange={handleInputChange}
+                  onChange={(e) => handleInputChange("password", e.target.value)}
+                  placeholder="Mínimo 6 caracteres"
+                  minLength={6}
                   required
-                  className="rounded-lg"
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="confirmPassword">Confirmar Senha</Label>
-                <Input
-                  id="confirmPassword"
-                  name="confirmPassword"
-                  type="password"
-                  placeholder="Digite a senha novamente"
-                  value={formData.confirmPassword}
-                  onChange={handleInputChange}
-                  required
-                  className="rounded-lg"
-                />
-              </div>
+
               <Button 
                 type="submit" 
-                className="w-full gradient-primary text-white rounded-lg py-3"
-                disabled={isLoading}
+                className="w-full bg-primary hover:bg-primary-600"
+                disabled={loading}
               >
-                {isLoading ? "Criando conta..." : "Criar conta grátis"}
+                {loading ? "Criando conta..." : "Criar Conta Grátis"}
               </Button>
             </form>
+
             <div className="mt-6 text-center">
-              <p className="text-gray-600">
+              <p className="text-sm text-gray-600">
                 Já tem uma conta?{" "}
-                <Link to="/login" className="text-primary hover:underline font-medium">
+                <Link 
+                  to="/login" 
+                  className="text-primary hover:text-primary-600 font-medium"
+                >
                   Fazer login
                 </Link>
               </p>
             </div>
           </CardContent>
         </Card>
+
+        <div className="text-center mt-6">
+          <Link 
+            to="/" 
+            className="text-sm text-gray-600 hover:text-gray-900"
+          >
+            ← Voltar ao início
+          </Link>
+        </div>
       </div>
     </div>
   );
