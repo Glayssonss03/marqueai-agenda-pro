@@ -44,10 +44,10 @@ export const useProfile = () => {
       toast({ title: "Perfil atualizado com sucesso!" });
     },
     onError: (error) => {
-      toast({ 
-        title: "Erro ao atualizar perfil", 
+      toast({
+        title: "Erro ao atualizar perfil",
         description: error.message,
-        variant: "destructive" 
+        variant: "destructive"
       });
     },
   });

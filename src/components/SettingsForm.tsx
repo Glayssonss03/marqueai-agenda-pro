@@ -3,36 +3,18 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useProfile } from "@/hooks/useProfile";
+import { Switch } from "@/components/ui/switch";
 import { useSettings } from "@/hooks/useSettings";
-
-interface OpeningHours {
-  [key: string]: {
-    open: string;
-    close: string;
-    closed: boolean;
-  };
-}
+import { useProfile } from "@/hooks/useProfile";
+import { useToast } from "@/hooks/use-toast";
 
 export const SettingsForm = () => {
+  const { settings, isLoading, updateSettings } = useSettings();
   const { profile, updateProfile } = useProfile();
-  const { settings, updateSettings } = useSettings();
+  const { toast } = useToast();
 
-  const [profileData, setProfileData] = useState({
-    barbershop_name: "",
-    primary_color: "#007BFF",
-    secondary_color: "#FFFFFF",
-    slug: "",
-  });
-
-  const [settingsData, setSettingsData] = useState({
-    cancellation_policy: "",
-    email_notifications: true,
-    whatsapp_notifications: true,
-    whatsapp_number: "",
+  const [formData, setFormData] = useState({
     opening_hours: {
       monday: { open: "09:00", close: "18:00", closed: false },
       tuesday: { open: "09:00", close: "18:00", closed: false },
@@ -41,92 +23,139 @@ export const SettingsForm = () => {
       friday: { open: "09:00", close: "18:00", closed: false },
       saturday: { open: "09:00", close: "18:00", closed: false },
       sunday: { open: "09:00", close: "18:00", closed: true },
-    } as OpeningHours,
+    },
+    whatsapp_number: "",
+    whatsapp_notifications: true,
+    email_notifications: true,
+    cancellation_policy: "Cancelamentos devem ser feitos com pelo menos 2 horas de antecedência.",
+    primary_color: "#007BFF",
+    secondary_color: "#FFFFFF",
+    logo_url: "",
   });
 
-  useEffect(() => {
-    if (profile) {
-      setProfileData({
-        barbershop_name: profile.barbershop_name || "",
-        primary_color: profile.primary_color || "#007BFF",
-        secondary_color: profile.secondary_color || "#FFFFFF",
-        slug: profile.slug || "",
-      });
-    }
-  }, [profile]);
+  const [publicLink, setPublicLink] = useState("");
 
   useEffect(() => {
     if (settings) {
-      setSettingsData({
-        cancellation_policy: settings.cancellation_policy || "",
-        email_notifications: settings.email_notifications ?? true,
-        whatsapp_notifications: settings.whatsapp_notifications ?? true,
+      setFormData(prev => ({
+        ...prev,
+        opening_hours: settings.opening_hours || prev.opening_hours,
         whatsapp_number: settings.whatsapp_number || "",
-        opening_hours: (settings.opening_hours as OpeningHours) || settingsData.opening_hours,
-      });
+        whatsapp_notifications: settings.whatsapp_notifications ?? true,
+        email_notifications: settings.email_notifications ?? true,
+        cancellation_policy: settings.cancellation_policy || prev.cancellation_policy,
+      }));
     }
   }, [settings]);
 
-  const handleProfileSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    if (profile) {
+      setFormData(prev => ({
+        ...prev,
+        primary_color: profile.primary_color || "#007BFF",
+        secondary_color: profile.secondary_color || "#FFFFFF",
+        logo_url: profile.logo_url || "",
+      }));
+      
+      if (profile.slug) {
+        setPublicLink(`${window.location.origin}/agendar/${profile.slug}`);
+      }
+    }
+  }, [profile]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    updateProfile.mutate(profileData);
+    
+    try {
+      // Atualizar configurações da barbearia
+      await updateSettings.mutateAsync({
+        opening_hours: formData.opening_hours,
+        whatsapp_number: formData.whatsapp_number,
+        whatsapp_notifications: formData.whatsapp_notifications,
+        email_notifications: formData.email_notifications,
+        cancellation_policy: formData.cancellation_policy,
+      });
+
+      // Atualizar perfil com cores e logo
+      await updateProfile.mutateAsync({
+        primary_color: formData.primary_color,
+        secondary_color: formData.secondary_color,
+        logo_url: formData.logo_url,
+      });
+
+    } catch (error) {
+      console.error("Erro ao salvar configurações:", error);
+    }
   };
 
-  const handleSettingsSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    updateSettings.mutate(settingsData);
+  const copyPublicLink = () => {
+    navigator.clipboard.writeText(publicLink);
+    toast({
+      title: "Link copiado!",
+      description: "O link da sua página de agendamento foi copiado para a área de transferência.",
+    });
   };
 
-  const updateOpeningHours = (day: string, field: string, value: any) => {
-    setSettingsData(prev => ({
-      ...prev,
-      opening_hours: {
-        ...prev.opening_hours,
-        [day]: {
-          ...prev.opening_hours[day],
-          [field]: value,
-        },
-      },
-    }));
-  };
-
-  const days = [
-    { key: "monday", label: "Segunda-feira" },
-    { key: "tuesday", label: "Terça-feira" },
-    { key: "wednesday", label: "Quarta-feira" },
-    { key: "thursday", label: "Quinta-feira" },
-    { key: "friday", label: "Sexta-feira" },
-    { key: "saturday", label: "Sábado" },
-    { key: "sunday", label: "Domingo" },
-  ];
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      {/* Informações da Barbearia */}
+      {/* Link Público */}
       <Card>
         <CardHeader>
-          <CardTitle>Informações da Barbearia</CardTitle>
+          <CardTitle>Link Público da Barbearia</CardTitle>
         </CardHeader>
-        <CardContent>
-          <form onSubmit={handleProfileSubmit} className="space-y-4">
-            <div>
-              <Label htmlFor="barbershop_name">Nome da Barbearia</Label>
+        <CardContent className="space-y-4">
+          <div>
+            <Label>Seu link de agendamento</Label>
+            <div className="flex gap-2">
               <Input
-                id="barbershop_name"
-                value={profileData.barbershop_name}
-                onChange={(e) => setProfileData(prev => ({ ...prev, barbershop_name: e.target.value }))}
-                placeholder="Nome da sua barbearia"
+                value={publicLink}
+                readOnly
+                className="bg-gray-50"
+              />
+              <Button onClick={copyPublicLink} variant="outline">
+                Copiar
+              </Button>
+            </div>
+            <p className="text-sm text-gray-600 mt-1">
+              Compartilhe este link com seus clientes para eles agendarem online
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Personalização */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Personalização</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <Label htmlFor="logo_url">URL do Logo</Label>
+              <Input
+                id="logo_url"
+                value={formData.logo_url}
+                onChange={(e) => setFormData(prev => ({ ...prev, logo_url: e.target.value }))}
+                placeholder="https://exemplo.com/logo.png"
               />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="primary_color">Cor Principal</Label>
+                <Label htmlFor="primary_color">Cor Primária</Label>
                 <Input
                   id="primary_color"
                   type="color"
-                  value={profileData.primary_color}
-                  onChange={(e) => setProfileData(prev => ({ ...prev, primary_color: e.target.value }))}
+                  value={formData.primary_color}
+                  onChange={(e) => setFormData(prev => ({ ...prev, primary_color: e.target.value }))}
                 />
               </div>
               <div>
@@ -134,125 +163,150 @@ export const SettingsForm = () => {
                 <Input
                   id="secondary_color"
                   type="color"
-                  value={profileData.secondary_color}
-                  onChange={(e) => setProfileData(prev => ({ ...prev, secondary_color: e.target.value }))}
+                  value={formData.secondary_color}
+                  onChange={(e) => setFormData(prev => ({ ...prev, secondary_color: e.target.value }))}
                 />
               </div>
             </div>
+          </CardContent>
+        </Card>
 
-            <div>
-              <Label htmlFor="slug">Link Personalizado</Label>
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-500">marqueai.com/</span>
-                <Input
-                  id="slug"
-                  value={profileData.slug}
-                  onChange={(e) => setProfileData(prev => ({ ...prev, slug: e.target.value }))}
-                  placeholder="minha-barbearia"
-                />
-              </div>
-            </div>
+        {/* Horários de Funcionamento */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Horários de Funcionamento</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {Object.entries(formData.opening_hours).map(([day, hours]) => {
+              const dayNames = {
+                monday: "Segunda-feira",
+                tuesday: "Terça-feira",
+                wednesday: "Quarta-feira",
+                thursday: "Quinta-feira",
+                friday: "Sexta-feira",
+                saturday: "Sábado",
+                sunday: "Domingo",
+              };
 
-            <Button type="submit" className="bg-primary hover:bg-primary-600">
-              Salvar Informações
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
-
-      {/* Horários de Funcionamento */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Horários de Funcionamento</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSettingsSubmit} className="space-y-4">
-            {days.map(({ key, label }) => (
-              <div key={key} className="flex items-center gap-4 p-3 border rounded-lg">
-                <div className="w-32">
-                  <span className="font-medium">{label}</span>
-                </div>
-                <div className="flex items-center gap-2">
+              return (
+                <div key={day} className="flex items-center gap-4">
+                  <div className="w-24">
+                    <span className="text-sm font-medium">{dayNames[day]}</span>
+                  </div>
                   <Switch
-                    checked={!settingsData.opening_hours[key]?.closed}
-                    onCheckedChange={(checked) => updateOpeningHours(key, "closed", !checked)}
+                    checked={!hours.closed}
+                    onCheckedChange={(checked) => 
+                      setFormData(prev => ({
+                        ...prev,
+                        opening_hours: {
+                          ...prev.opening_hours,
+                          [day]: { ...hours, closed: !checked }
+                        }
+                      }))
+                    }
                   />
-                  <span className="text-sm">Aberto</span>
+                  {!hours.closed && (
+                    <>
+                      <Input
+                        type="time"
+                        value={hours.open}
+                        onChange={(e) => 
+                          setFormData(prev => ({
+                            ...prev,
+                            opening_hours: {
+                              ...prev.opening_hours,
+                              [day]: { ...hours, open: e.target.value }
+                            }
+                          }))
+                        }
+                        className="w-24"
+                      />
+                      <span>às</span>
+                      <Input
+                        type="time"
+                        value={hours.close}
+                        onChange={(e) => 
+                          setFormData(prev => ({
+                            ...prev,
+                            opening_hours: {
+                              ...prev.opening_hours,
+                              [day]: { ...hours, close: e.target.value }
+                            }
+                          }))
+                        }
+                        className="w-24"
+                      />
+                    </>
+                  )}
+                  {hours.closed && (
+                    <span className="text-gray-500">Fechado</span>
+                  )}
                 </div>
-                {!settingsData.opening_hours[key]?.closed && (
-                  <>
-                    <Input
-                      type="time"
-                      value={settingsData.opening_hours[key]?.open || "09:00"}
-                      onChange={(e) => updateOpeningHours(key, "open", e.target.value)}
-                      className="w-32"
-                    />
-                    <span>às</span>
-                    <Input
-                      type="time"
-                      value={settingsData.opening_hours[key]?.close || "18:00"}
-                      onChange={(e) => updateOpeningHours(key, "close", e.target.value)}
-                      className="w-32"
-                    />
-                  </>
-                )}
-              </div>
-            ))}
-          </form>
-        </CardContent>
-      </Card>
+              );
+            })}
+          </CardContent>
+        </Card>
 
-      {/* Configurações Gerais */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Configurações Gerais</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSettingsSubmit} className="space-y-4">
-            <div>
-              <Label htmlFor="cancellation_policy">Política de Cancelamento</Label>
-              <Textarea
-                id="cancellation_policy"
-                value={settingsData.cancellation_policy}
-                onChange={(e) => setSettingsData(prev => ({ ...prev, cancellation_policy: e.target.value }))}
-                placeholder="Cancelamentos devem ser feitos com pelo menos 2 horas de antecedência."
-                rows={3}
-              />
-            </div>
-
+        {/* Notificações */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Notificações</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
             <div>
               <Label htmlFor="whatsapp_number">Número do WhatsApp</Label>
               <Input
                 id="whatsapp_number"
-                value={settingsData.whatsapp_number}
-                onChange={(e) => setSettingsData(prev => ({ ...prev, whatsapp_number: e.target.value }))}
+                value={formData.whatsapp_number}
+                onChange={(e) => setFormData(prev => ({ ...prev, whatsapp_number: e.target.value }))}
                 placeholder="(11) 99999-9999"
               />
             </div>
 
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <Label>Notificações por E-mail</Label>
-                <Switch
-                  checked={settingsData.email_notifications}
-                  onCheckedChange={(checked) => setSettingsData(prev => ({ ...prev, email_notifications: checked }))}
-                />
-              </div>
-              <div className="flex items-center justify-between">
-                <Label>Notificações por WhatsApp</Label>
-                <Switch
-                  checked={settingsData.whatsapp_notifications}
-                  onCheckedChange={(checked) => setSettingsData(prev => ({ ...prev, whatsapp_notifications: checked }))}
-                />
-              </div>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="whatsapp_notifications">Notificações WhatsApp</Label>
+              <Switch
+                id="whatsapp_notifications"
+                checked={formData.whatsapp_notifications}
+                onCheckedChange={(checked) => 
+                  setFormData(prev => ({ ...prev, whatsapp_notifications: checked }))
+                }
+              />
             </div>
 
-            <Button type="submit" className="bg-primary hover:bg-primary-600">
-              Salvar Configurações
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="email_notifications">Notificações E-mail</Label>
+              <Switch
+                id="email_notifications"
+                checked={formData.email_notifications}
+                onCheckedChange={(checked) => 
+                  setFormData(prev => ({ ...prev, email_notifications: checked }))
+                }
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Política de Cancelamento */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Política de Cancelamento</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Label htmlFor="cancellation_policy">Texto da Política</Label>
+            <Input
+              id="cancellation_policy"
+              value={formData.cancellation_policy}
+              onChange={(e) => setFormData(prev => ({ ...prev, cancellation_policy: e.target.value }))}
+              placeholder="Ex: Cancelamentos devem ser feitos com pelo menos 2 horas de antecedência"
+            />
+          </CardContent>
+        </Card>
+
+        <Button type="submit" className="w-full bg-primary hover:bg-primary-600">
+          Salvar Configurações
+        </Button>
+      </form>
     </div>
   );
 };
