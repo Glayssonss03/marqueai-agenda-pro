@@ -9,12 +9,39 @@ import { useSettings } from "@/hooks/useSettings";
 import { useProfile } from "@/hooks/useProfile";
 import { useToast } from "@/hooks/use-toast";
 
+type DaySchedule = {
+  open: string;
+  close: string;
+  closed: boolean;
+};
+
+type OpeningHours = {
+  monday: DaySchedule;
+  tuesday: DaySchedule;
+  wednesday: DaySchedule;
+  thursday: DaySchedule;
+  friday: DaySchedule;
+  saturday: DaySchedule;
+  sunday: DaySchedule;
+};
+
+type FormDataType = {
+  opening_hours: OpeningHours;
+  whatsapp_number: string;
+  whatsapp_notifications: boolean;
+  email_notifications: boolean;
+  cancellation_policy: string;
+  primary_color: string;
+  secondary_color: string;
+  logo_url: string;
+};
+
 export const SettingsForm = () => {
   const { settings, isLoading, updateSettings } = useSettings();
   const { profile, updateProfile } = useProfile();
   const { toast } = useToast();
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<FormDataType>({
     opening_hours: {
       monday: { open: "09:00", close: "18:00", closed: false },
       tuesday: { open: "09:00", close: "18:00", closed: false },
@@ -39,7 +66,7 @@ export const SettingsForm = () => {
     if (settings) {
       setFormData(prev => ({
         ...prev,
-        opening_hours: settings.opening_hours || prev.opening_hours,
+        opening_hours: (settings.opening_hours as OpeningHours) || prev.opening_hours,
         whatsapp_number: settings.whatsapp_number || "",
         whatsapp_notifications: settings.whatsapp_notifications ?? true,
         email_notifications: settings.email_notifications ?? true,
@@ -178,7 +205,7 @@ export const SettingsForm = () => {
           </CardHeader>
           <CardContent className="space-y-4">
             {Object.entries(formData.opening_hours).map(([day, hours]) => {
-              const dayNames = {
+              const dayNames: Record<string, string> = {
                 monday: "Segunda-feira",
                 tuesday: "Terça-feira",
                 wednesday: "Quarta-feira",
